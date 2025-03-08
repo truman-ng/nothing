@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>抽奖列表</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    #userInfo {
+      background: #f9f9f9;
+      padding: 10px;
+      margin-bottom: 20px;
+      border: 1px solid #ccc;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    #upcomingLottery {
+      background: #f0f8ff;
+      padding: 10px;
+      margin-bottom: 20px;
+    }
+    .lottery-item button {
+      margin-left: 10px;
+    }
+    #createLotterySection {
+      margin-bottom: 20px;
+      display: none; /* 默认隐藏 */
+    }
+    #winnersModal {
+      position: fixed;
+      top: 20%;
+      left: 50%;
+      transform: translate(-50%, 0);
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px 20px;
+      display: none;
+    }
+    #winnersModal h3 {
+      margin-top: 0;
+    }
+    #winnersModal ul {
+      margin: 10px 0;
+    }
+    #winnersModal button {
+      margin-top: 10px;
+    }
+    #userMenuSection {
+      margin-bottom: 20px;
+      display: none; /* 默认隐藏 */
+    }
+  </style>
+</head>
+<body>
+<!-- 显示当前登录用户 -->
+<div id="userInfo">
+  <span>当前登录用户：<strong id="currentUsername"></strong></span>
+</div>
+
+<!-- 用户菜单按钮区域 -->
+<div id="userMenuSection">
+  <button id="userMenuBtn">用户菜单</button>
+</div>
+
+<h1>抽奖列表</h1>
+
+<!-- 这里放创建抽奖按钮，但默认隐藏 -->
+<div id="createLotterySection">
+  <button id="createLotteryBtn">创建抽奖</button>
+</div>
+
+<!-- 这里展示“即将开始的一场抽奖” -->
+<div id="upcomingLottery"></div>
+
+<!-- 这里展示其他抽奖列表 -->
+<div id="lotteryList"></div>
+
+<!-- 中奖者列表弹窗 -->
+<div id="winnersModal">
+  <h3>中奖者名单</h3>
+  <ul id="winnersList"></ul>
+  <button id="closeWinnersBtn">关闭</button>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // 1. 读取本地的 user
+    const userStr = localStorage.getItem("user");
+    const nothing = JSON.parse(localStorage.getItem("nothing"));
+    const usernameEl = document.getElementById("currentUsername");
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      // 显示用户名
+      usernameEl.textContent = user.username || "(无)";
+      // 如果 badge == 'NOTHING'，显示“创建抽奖”按钮
+      if (nothing) {
+        const createSection = document.getElementById("createLotterySection");
+        createSection.style.display = "block";
+
+        // 点击“用户菜单” => 跳转到 userManagement.html
+        const userMenuSection = document.getElementById("userMenuSection");
+        const userMenuBtn = document.getElementById("userMenuBtn");
+        userMenuSection.style.display = "block";
+        userMenuBtn.addEventListener("click", () => {
+          window.location.href = "userManagement.html";
+        });
+
+      }
+    } else {
+      // 如果未登录
+      usernameEl.textContent = "未登录";
+
+      // 添加“去登录”按钮
+      const goLoginBtn = document.createElement("button");
+      goLoginBtn.textContent = "去登录";
+      goLoginBtn.style.marginLeft = "10px";
+      goLoginBtn.addEventListener("click", () => {
+        window.location.href = "index.html";
+      });
+
+      // 将按钮插入
+      usernameEl.parentNode.appendChild(goLoginBtn);
+    }
+
+    // 3. 绑定按钮事件
+    const createBtn = document.getElementById("createLotteryBtn");
+    createBtn.addEventListener("click", () => {
+      // 跳转到创建抽奖页面
+      window.location.href = "createLottery.html";
+    });
+
+    // 关闭弹窗按钮
+    const closeBtn = document.getElementById("closeWinnersBtn");
+    closeBtn.addEventListener("click", () => {
+      document.getElementById("winnersModal").style.display = "none";
+    });
+
+    // 4. 加载抽奖列表等其他逻辑
+    loadLotteryList();
+  });
+
+  // 将时间戳(秒级) 转成人类可读时间
+  function formatTime(ts) {
+    if (!ts) return "无时间";
+    // ts 为秒级时，需要 * 1000 转毫秒
+    const date = new Date(ts * 1000);
+    return date.toLocaleString();
+  }
+
+  // 根据 lottery.type 返回更友好的中文描述
+  function formatType(type) {
+    if (type === "rush") return "抢占式抽奖";
+    if (type === "random") return "随机抽取";
+    return "未知类型";
+  }
+
+  // 加载抽奖列表并渲染
+  async function loadLotteryList() {
+    try {
+      // 假设后端的接口是 /lottery/list
+      const res = await fetch("/lottery/list");
+      const data = await res.json();
+      const list = data.lotteries || [];
+
+      // 当前时间(秒级)
+      const now = Math.floor(Date.now() / 1000);
+
+      // 把 startTime/endTime 转成 number 方便比较
+      list.forEach(item => {
+        item.startTime = parseInt(item.startTime, 10) || 0;
+        item.endTime = parseInt(item.endTime, 10) || 0;
+      });
+
+      // 1. 找到“即将开始的活动” => startTime > now, 并取最小的 startTime
+      const upcoming = list
+              .filter(l => l.startTime > now)
+              .sort((a, b) => a.startTime - b.startTime);
+
+      // 取最早开始的
+      const nextLottery = upcoming.length > 0 ? upcoming[0] : null;
+
+      // 2. 渲染“即将开始的一场抽奖活动”
+      renderUpcoming(nextLottery);
+
+      // 3. 将“最早开始”那场从列表中移除，以免重复展示
+      const filteredList = nextLottery
+              ? list.filter(l => l.lotteryId !== nextLottery.lotteryId)
+              : list;
+
+      // 4. 渲染剩余列表
+      renderLotteryList(filteredList, now);
+    } catch (err) {
+      console.error("加载抽奖列表失败:", err);
+      document.getElementById("upcomingLottery").innerText =
+              "加载失败，请检查网络或后端。";
+    }
+  }
+
+  // 渲染“即将开始的抽奖活动”
+  function renderUpcoming(lottery) {
+    const container = document.getElementById("upcomingLottery");
+    container.innerHTML = ""; // 清空
+
+    if (!lottery) {
+      container.innerHTML = "<p>当前暂无即将开始的抽奖活动。</p>";
+      return;
+    }
+
+    // 构建展示
+    const title = document.createElement("h2");
+    title.textContent = `即将开始的抽奖：${lottery.title}`;
+
+    const typeInfo = document.createElement("p");
+    typeInfo.textContent = `抽奖类型：${formatType(lottery.type)}`;
+
+    const timeInfo = document.createElement("p");
+    timeInfo.textContent = `开始时间：${formatTime(lottery.startTime)} / 结束时间：${formatTime(lottery.endTime)}`;
+
+    const joinBtn = document.createElement("button");
+    joinBtn.textContent = "点击参与";
+    joinBtn.onclick = () => joinLottery(lottery.lotteryId);
+    if (JSON.parse(localStorage.getItem("nothing"))) {
+      joinBtn.hidden = true;
+    }
+    container.appendChild(title);
+    container.appendChild(typeInfo);
+    container.appendChild(timeInfo);
+    container.appendChild(joinBtn);
+  }
+
+  // 渲染抽奖列表
+  function renderLotteryList(lotteries, now) {
+    const container = document.getElementById("lotteryList");
+    container.innerHTML = ""; // 清空
+
+    if (lotteries.length === 0) {
+      container.innerHTML = "<p>没有更多抽奖活动。</p>";
+      return;
+    }
+
+    // 判断当前用户是否 badge == NOTHING（决定是否隐藏“参与抽奖”按钮）
+    const nothing = JSON.parse(localStorage.getItem("nothing"));
+
+    lotteries.forEach(lottery => {
+      const itemDiv = document.createElement("div");
+      itemDiv.className = "lottery-item";
+
+      // 标题
+      const titleEl = document.createElement("strong");
+      titleEl.textContent = lottery.title;
+
+      // 类型
+      const typeEl = document.createElement("span");
+      typeEl.textContent = ` [${formatType(lottery.type)}] `;
+
+      // 时间信息
+      const timeEl = document.createElement("span");
+      timeEl.textContent = `(开始: ${formatTime(lottery.startTime)}, 结束: ${formatTime(lottery.endTime)})`;
+
+      // 按钮
+      const btn = document.createElement("button");
+      btn.textContent = "参与抽奖";
+      btn.onclick = () => joinLottery(lottery.lotteryId);
+
+      // 状态信息
+      let statusMsg;
+      if (now < lottery.startTime) {
+        statusMsg = " (未开始)";
+        btn.disabled = true; // 未开始，不能报名
+      } else if (now > lottery.endTime) {
+        statusMsg = " (已结束)";
+        btn.disabled = true; // 已结束，不能报名
+      } else {
+        statusMsg = " (进行中)";
+      }
+
+      // 如果想让“NOTHING”用户看不到参与按钮，就 hidden = true
+      if (nothing) {
+        btn.hidden = true;
+      }
+
+      const statusEl = document.createElement("span");
+      statusEl.textContent = statusMsg;
+
+      // 新增：查看中奖者按钮
+      const viewWinnersBtn = document.createElement("button");
+      viewWinnersBtn.textContent = "查看中奖者";
+
+      // 如果 lottery.status === "finished"，显示并可点击
+      if (lottery.status === "finished") {
+        viewWinnersBtn.onclick = () => viewWinners(lottery.lotteryId);
+      } else {
+        // 活动未结束，隐藏或禁用按钮
+        // 方式1：隐藏按钮
+        // viewWinnersBtn.style.display = "none";
+
+        // 方式2：禁用按钮并加提示
+        viewWinnersBtn.disabled = true;
+        viewWinnersBtn.title = "活动尚未结束，无法查看中奖者";
+      }
+
+      // 按钮：查看详情
+      const detailBtn = document.createElement("button");
+      detailBtn.textContent = "查看详情";
+      detailBtn.onclick = () => {
+        // 跳转到 lotteryDetail.html，并传递 lotteryId
+        window.location.href = `lotteryDetail.html?lotteryId=${lottery.lotteryId}`;
+      };
+
+      // 组装
+      itemDiv.appendChild(titleEl);
+      itemDiv.appendChild(typeEl);
+      itemDiv.appendChild(timeEl);
+      itemDiv.appendChild(statusEl);
+      itemDiv.appendChild(btn);
+      itemDiv.appendChild(viewWinnersBtn);
+      itemDiv.appendChild(detailBtn);
+      container.appendChild(itemDiv);
+    });
+  }
+
+  // 点击“参与抽奖”按钮时调用后端
+  async function joinLottery(lotteryId) {
+    try {
+      // 这里假设用户已登录，本地有 user
+      const userStr = localStorage.getItem("user");
+      if (!userStr) {
+        alert("请先登录！");
+        window.location.href = "index.html";
+      }
+      const user = JSON.parse(userStr);
+
+      // 调用后端
+      const res = await fetch(`/lottery/${lotteryId}/enter`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: user.username
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        // 如果是抢占式抽奖，可能立即中奖。后端返回 isWinner: true 时，可以刷新页面
+        if (data.isWinner) {
+          await loadLotteryList();
+        }
+      } else {
+        alert(data.message || "参与失败");
+      }
+    } catch (err) {
+      console.error("joinLottery error:", err);
+      alert("参与抽奖请求失败");
+    }
+  }
+  // 新增：查看中奖者
+  async function viewWinners(lotteryId) {
+    try {
+      const res = await fetch(`/lottery/${lotteryId}/winners`, {
+        method: "GET"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "查看中奖者失败");
+        return;
+      }
+      // data.winners: [ "user123", "user456", ... ]
+      showWinnersModal(data.winners);
+    } catch (err) {
+      console.error("viewWinners error:", err);
+      alert("查看中奖者请求失败");
+    }
+  }
+
+  // 在弹窗里显示中奖者名单
+  function showWinnersModal(winners) {
+    const modal = document.getElementById("winnersModal");
+    const listEl = document.getElementById("winnersList");
+    listEl.innerHTML = ""; // 清空
+
+    if (!winners || winners.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "暂无中奖者";
+      listEl.appendChild(li);
+    } else {
+      winners.forEach(w => {
+        const li = document.createElement("li");
+        li.textContent = w; // 如果后端返回对象 {username, userId}, 这里可以 li.textContent = w.username
+        listEl.appendChild(li);
+      });
+    }
+    modal.style.display = "block"; // 显示弹窗
+  }
+</script>
+</body>
+</html>

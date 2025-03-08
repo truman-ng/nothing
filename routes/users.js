@@ -1,9 +1,13 @@
-var express = require('express');
-var router = express.Router();
+// routes/userRoutes.js
+const express = require("express");
+const { getAllUsers, searchUsersByUsername } = require("../controllers/userController");
 
-/* GET users listing. */
-router.get('/', function(req, res, next) {
-  res.send('respond with a resource');
-});
+const router = express.Router();
+
+// 获取所有用户
+router.get("/", getAllUsers);
+
+// 根据关键字搜索用户
+router.get("/search", searchUsersByUsername);
 
 module.exports = router;

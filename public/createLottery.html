@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>发布抽奖活动</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+    }
+    form p {
+      margin: 8px 0;
+    }
+    label {
+      display: inline-block;
+      width: 80px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+    .success {
+      color: green;
+      margin-top: 10px;
+    }
+    .error {
+      color: red;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<h1>发布抽奖活动</h1>
+
+<form id="createLotteryForm">
+  <p>
+    <label>标题：</label>
+    <input type="text" name="title" required />
+  </p>
+  <p>
+    <label>描述：</label>
+    <textarea name="description" rows="3" cols="40" placeholder="活动说明、奖品内容等"></textarea>
+  </p>
+  <p>
+    <label>开始时间：</label>
+    <!-- 使用 datetime-local，让用户在浏览器中选择日期和时间 -->
+    <label>
+      <input type="datetime-local" name="startTime" required step="1"  />
+    </label>
+  </p>
+  <p>
+    <label>结束时间：</label>
+    <label>
+      <input type="datetime-local" name="endTime" required step="1"  />
+    </label>
+  </p>
+  <p>
+    <label>抽奖类型：</label>
+    <label>
+      <select name="type">
+        <option value="random">随机抽取</option>
+        <option value="rush">抢占式抽奖</option>
+      </select>
+    </label>
+  </p>
+  <p>
+    <label>中奖名额：</label>
+    <label>
+      <input type="number" name="totalWinners" value="1" min="1" required />
+    </label>
+  </p>
+
+  <button type="submit">发布抽奖</button>
+</form>
+
+<div id="resultMsg"></div>
+
+<script>
+  const form = document.getElementById("createLotteryForm");
+  const resultMsg = document.getElementById("resultMsg");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault(); // 阻止表单默认提交行为
+
+    // 清空提示
+    resultMsg.textContent = "";
+    resultMsg.className = "";
+
+    // 获取表单数据
+    const formData = new FormData(form);
+    const title = formData.get("title").trim();
+    const description = formData.get("description").trim();
+    const type = formData.get("type");
+    const totalWinners = parseInt(formData.get("totalWinners"), 10);
+
+    // 将 datetime-local 转换为 Unix 时间戳（秒级）
+    const startTimeStr = formData.get("startTime");
+    const endTimeStr = formData.get("endTime");
+    const startTime = Math.floor(new Date(startTimeStr).getTime() / 1000);
+    const endTime = Math.floor(new Date(endTimeStr).getTime() / 1000);
+
+    // 简单校验：结束时间必须大于开始时间
+    if (endTime <= startTime) {
+      resultMsg.textContent = "结束时间必须晚于开始时间！";
+      resultMsg.className = "error";
+      return;
+    }
+
+    // 构造请求体
+    const data = {
+      title,
+      description,
+      startTime,
+      endTime,
+      type,
+      totalWinners
+    };
+
+    try {
+      // 发送请求到后端
+      const res = await fetch("/lottery/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+      if (res.ok) {
+        // 发布成功
+        resultMsg.textContent = `发布成功！抽奖ID：${result.lotteryId || "无"}`;
+        resultMsg.className = "success";
+        // 清空表单
+        form.reset();
+        window.location.href = "lotteryList.html";
+      } else {
+        // 发布失败
+        resultMsg.textContent = result.message || "发布失败";
+        resultMsg.className = "error";
+      }
+    } catch (err) {
+      console.error("Error creating lottery:", err);
+      resultMsg.textContent = "发布失败，请检查网络或后端接口！";
+      resultMsg.className = "error";
+    }
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>用户管理</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+    }
+    #searchSection {
+      margin-bottom: 20px;
+    }
+    #userList .user-item {
+      margin: 6px 0;
+    }
+  </style>
+</head>
+<body>
+<h1>用户管理</h1>
+<h3 onclick="window.location.href='lotteryList.html'"><u>返回抽奖列表</u></h3>
+<div id="searchSection">
+  <label for="searchInput"></label><input type="text" id="searchInput" placeholder="输入用户名搜索" />
+  <button id="searchBtn">搜索</button>
+  <button id="showAllBtn">查看所有用户</button>
+</div>
+<div id="userList"></div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    // 1. 绑定搜索按钮
+    const searchBtn = document.getElementById("searchBtn");
+    searchBtn.addEventListener("click", () => {
+      const keyword = document.getElementById("searchInput").value.trim();
+      if (keyword) {
+        searchUsers(keyword);
+      } else {
+        alert("请输入搜索关键字");
+      }
+    });
+
+    // 2. 绑定“查看所有用户”按钮
+    const showAllBtn = document.getElementById("showAllBtn");
+    showAllBtn.addEventListener("click", () => {
+      fetchAllUsers();
+    });
+    fetchAllUsers();
+  });
+
+  // 按用户名搜索
+  async function searchUsers(keyword) {
+    try {
+      const res = await fetch(`/users/search?username=${encodeURIComponent(keyword)}`);
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "搜索失败");
+        return;
+      }
+      renderUserList(data.users || []);
+    } catch (err) {
+      console.error("searchUsers error:", err);
+      alert("搜索请求失败");
+    }
+  }
+
+  // 获取所有用户
+  async function fetchAllUsers() {
+    try {
+      const res = await fetch("/users");
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.message || "获取用户列表失败");
+        return;
+      }
+      renderUserList(data.users || []);
+    } catch (err) {
+      console.error("fetchAllUsers error:", err);
+      alert("获取用户列表请求失败");
+    }
+  }
+
+  // 将用户数组渲染到页面
+  function renderUserList(users) {
+    const container = document.getElementById("userList");
+    container.innerHTML = ""; // 清空
+
+    if (users.length === 0) {
+      container.innerHTML = "<p>无用户数据</p>";
+      return;
+    }
+
+    users.forEach(u => {
+      const div = document.createElement("div");
+      div.className = "user-item";
+      // 格式化本地时间
+      let localTimeStr = "无时间";
+      if (u.createdAt) {
+        const msTime = Number(u.createdAt);
+        localTimeStr = formatLocalDateTime(msTime);
+      }
+
+      // 假设后端返回 { username, badge, createdAt, ... }
+      div.textContent = `用户名: ${u.username}, badge: ${u.badge || "无"}, 创建时间: ${localTimeStr || ""}`;
+      container.appendChild(div);
+    });
+  }
+
+  /**
+   * 将毫秒级时间戳转换为本地时区的 "yyyy-MM-dd HH:mm:ss" 字符串
+   * @param {number} msTime - 毫秒级时间戳 (如 1741443077481)
+   * @returns {string} 本地时区的 "yyyy-MM-dd HH:mm:ss"
+   */
+  function formatLocalDateTime(msTime) {
+    const date = new Date(msTime);
+    // new Date(毫秒数) 会根据系统本地时区解析
+
+    const year = date.getFullYear();
+    // 注意：getMonth() 范围是 0~11，所以要 +1
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    // 拼接成 yyyy-MM-dd HH:mm:ss
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  }
+
+</script>
+</body>
+</html>

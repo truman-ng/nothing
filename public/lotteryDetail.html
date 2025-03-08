@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8" />
+    <title>抽奖详情</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        #lotteryDetail {
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+<h1>抽奖详情</h1>
+<div id="lotteryDetail">加载中...</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        // 1. 从 URL 中获取 lotteryId
+        const urlParams = new URLSearchParams(window.location.search);
+        const lotteryId = urlParams.get("lotteryId");
+        if (!lotteryId) {
+            document.getElementById("lotteryDetail").textContent = "未指定 lotteryId";
+            return;
+        }
+
+        // 2. 调用后端接口获取详情
+        fetchLotteryDetail(lotteryId);
+    });
+
+    async function fetchLotteryDetail(lotteryId) {
+        try {
+            // 调用 GET /lottery/:id
+            const res = await fetch(`/lottery/${lotteryId}`);
+            const data = await res.json();
+
+            if (!res.ok) {
+                document.getElementById("lotteryDetail").textContent = data.message || "获取抽奖详情失败";
+                return;
+            }
+
+            renderLotteryDetail(data);
+        } catch (err) {
+            console.error("fetchLotteryDetail error:", err);
+            document.getElementById("lotteryDetail").textContent = "请求出错，请检查网络";
+        }
+    }
+
+    function renderLotteryDetail(lottery) {
+        const container = document.getElementById("lotteryDetail");
+        container.innerHTML = ""; // 清空
+
+        const titleEl = document.createElement("h2");
+        titleEl.textContent = `标题：${lottery.title}`;
+
+        const descEl = document.createElement("p");
+        descEl.textContent = `描述：${lottery.description || "无"}`;
+
+        const timeEl = document.createElement("p");
+        timeEl.textContent = `开始时间：${lottery.startTime}，结束时间：${lottery.endTime}`;
+
+        const typeEl = document.createElement("p");
+        typeEl.textContent = `抽奖类型：${lottery.type}`;
+
+        const statusEl = document.createElement("p");
+        statusEl.textContent = `当前状态：${lottery.status}`;
+
+        // 新增：显示中奖者
+        const winnersEl = document.createElement("p");
+        winnersEl.textContent = `中奖者: ${lottery.winners?.join(", ") || "无"}`;
+
+        // 新增：显示所有参与者
+        const participantsEl = document.createElement("p");
+        participantsEl.textContent = `参与者: ${lottery.participants?.join(", ") || "无"}`;
+
+
+        container.appendChild(titleEl);
+        container.appendChild(descEl);
+        container.appendChild(timeEl);
+        container.appendChild(typeEl);
+        container.appendChild(statusEl);
+        container.appendChild(winnersEl);
+        container.appendChild(participantsEl);
+    }
+</script>
+</body>
+</html>
