@@ -61,7 +61,8 @@
         descEl.textContent = `描述：${lottery.description || "无"}`;
 
         const timeEl = document.createElement("p");
-        timeEl.textContent = `开始时间：${lottery.startTime}，结束时间：${lottery.endTime}`;
+        // 格式化本地时间
+        timeEl.textContent = `开始时间：${formatTime(lottery.startTime)}，结束时间：${formatTime(lottery.startTime)}`;
 
         const typeEl = document.createElement("p");
         typeEl.textContent = `抽奖类型：${lottery.type}`;
@@ -86,6 +87,15 @@
         container.appendChild(winnersEl);
         container.appendChild(participantsEl);
     }
+
+    // 将时间戳(秒级) 转成人类可读时间
+    function formatTime(ts) {
+        if (!ts) return "无时间";
+        // ts 为秒级时，需要 * 1000 转毫秒
+        const date = new Date(ts * 1000);
+        return date.toLocaleString();
+    }
+
 </script>
 </body>
 </html>
