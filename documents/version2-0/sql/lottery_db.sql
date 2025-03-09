@@ -1,8 +1,7 @@
 create
 database lottery_db
     with owner neondb_owner;
-\c
-lottery_db;
+\c lottery_db;
 
 -- 创建 users 表
 CREATE TABLE IF NOT EXISTS users
