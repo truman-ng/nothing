@@ -1,72 +1,98 @@
-// controllers/userController.js
-const redis = require("../config/redis"); // 你的 Redis 连接
+// controllers/UserController.js
+const bcrypt = require("bcrypt");
+const UserModel = require("../models/UserModel");
 
-/**
- * 获取所有用户列表
- * 假设我们在 Redis 中维护一个 Set "users:all"，存放所有用户 ID（或 username）
- * 每个用户信息存储在 "user:{id}" 的 Hash 里
- */
-async function getAllUsers(req, res) {
-    try {
-        // 1. 取出所有用户 ID
-        const userIds = await redis.smembers("users:all"); // 或 "user:all"
+const UserController = {
+    /**
+     * 注册
+     * body: { nickname, password, email, signature }
+     */
+    async register(req, res) {
+        try {
+            const { nickname, password, email, signature } = req.body;
 
-        const users = [];
-        // 2. 遍历每个 ID，从 Hash 里获取详细信息
-        for (const id of userIds) {
-            const data = await redis.hgetall(`user:${id}`);
-            // data 可能包含 { username, badge, createdAt, ... }
-            // 如果 username 存在 Hash 中，就用 data.username；否则用 id
-            users.push({
-                username: data.username,
-                badge: data.badge || "",
-                createdAt: data.createdAt || ""
-            });
-        }
-
-        // 3. 返回 JSON
-        return res.json({ users });
-    } catch (err) {
-        console.error("getAllUsers error:", err);
-        return res.status(500).json({ message: "服务器错误" });
-    }
-}
-
-/**
- * 按用户名关键字搜索用户
- * 示例：GET /users/search?username=xxx
- * 我们会遍历所有用户，过滤 username 中包含关键字的
- */
-async function searchUsersByUsername(req, res) {
-    try {
-        // 1. 读取搜索关键字
-        const keyword = req.query.username || "";
-
-        // 2. 拿到所有用户 ID
-        const userIds = await redis.smembers("users:all");
-
-        const matched = [];
-        // 3. 遍历每个用户，检查其 username 是否包含 keyword
-        for (const id of userIds) {
-            const data = await redis.hgetall(`user:${id}`);
-            const uname = data.username || id;
-
-            // 简单字符串包含判断
-            if (uname.includes(keyword)) {
-                matched.push({
-                    username: uname,
-                    badge: data.badge || "",
-                    createdAt: data.createdAt || ""
-                });
+            // 1. 校验
+            if (!nickname || !password || !email) {
+                return res.status(400).json({ message: "缺少必填字段" });
             }
+            if (nickname.length > 10) {
+                return res.status(400).json({ message: "昵称不能超过10个字符(示例)" });
+            }
+            if (signature && signature.length > 300) {
+                return res.status(400).json({ message: "个性签名不能超过300个字符(示例)" });
+            }
+
+            // 2. 判断 email 是否已存在
+            const existingUser = await UserModel.findByEmail(email);
+            if (existingUser) {
+                return res.status(400).json({ message: "邮箱已被注册" });
+            }
+
+            // 3. 加密密码
+            const saltRounds = 10;
+            const passwordHash = await bcrypt.hash(password, saltRounds);
+
+            // 4. 创建用户
+            const { insertId, username } = await UserModel.createUser({
+                nickname,
+                passwordHash,
+                email,
+                signature
+            });
+
+            return res.json({
+                message: "注册成功",
+                user_id: insertId,
+                username
+            });
+        } catch (err) {
+            console.error("register error:", err);
+            return res.status(500).json({ message: "服务器错误" });
         }
+    },
 
-        // 4. 返回匹配的用户列表
-        return res.json({ users: matched });
-    } catch (err) {
-        console.error("searchUsersByUsername error:", err);
-        return res.status(500).json({ message: "服务器错误" });
+    /**
+     * 登录
+     * body: { email, password }
+     */
+    async login(req, res) {
+        try {
+            const { email, password } = req.body;
+            if (!email || !password) {
+                return res.status(400).json({ message: "缺少邮箱或密码" });
+            }
+
+            // 1. 查找用户
+            const user = await UserModel.findByEmail(email);
+            if (!user) {
+                return res.status(400).json({ message: "用户不存在或密码错误" });
+            }
+
+            // 2. 验证密码
+            const match = await bcrypt.compare(password, user.password);
+            if (!match) {
+                return res.status(400).json({ message: "用户不存在或密码错误" });
+            }
+
+            // 3. 更新 login_time
+            await UserModel.updateLoginTime(user.user_id);
+
+            // 4. 返回用户信息
+            return res.json({
+                message: "登录成功",
+                user: {
+                    user_id: user.user_id,
+                    username: user.username,
+                    nickname: user.nickname,
+                    email: user.email,
+                    login_time: user.login_time
+                }
+            });
+        } catch (err) {
+            console.error("login error:", err);
+            return res.status(500).json({ message: "服务器错误" });
+        }
     }
-}
+};
 
-module.exports = { getAllUsers, searchUsersByUsername };
+module.exports = UserController;

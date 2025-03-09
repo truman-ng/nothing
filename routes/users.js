@@ -1,13 +1,15 @@
-// routes/userRoutes.js
+// routes/UserRoutes.js
 const express = require("express");
-const { getAllUsers, searchUsersByUsername } = require("../controllers/userController");
+const UserController = require("../controllers/UserController");
 
 const router = express.Router();
 
-// 获取所有用户
-router.get("/", getAllUsers);
+// 注册
+router.post("/register", UserController.register);
 
-// 根据关键字搜索用户
-router.get("/search", searchUsersByUsername);
+// 登录
+router.post("/login", UserController.login);
+
+// 其他接口(如获取用户信息)...
 
 module.exports = router;
